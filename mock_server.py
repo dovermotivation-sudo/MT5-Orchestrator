@@ -191,8 +191,38 @@ class MockBhionexHandler(http.server.BaseHTTPRequestHandler):
             "message": f"Route '{path}' not found."
         }).encode("utf-8"))
 
+import os
+
+def load_dotenv(dotenv_path=".env"):
+    if not os.path.exists(dotenv_path):
+        return False
+    with open(dotenv_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip()
+                if val.startswith('"') and val.endswith('"'):
+                    val = val[1:-1]
+                elif val.startswith("'") and val.endswith("'"):
+                    val = val[1:-1]
+                os.environ[key] = val
+    return True
+
 def main():
-    port = 5000
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dotenv_path = os.path.join(script_dir, ".env")
+    load_dotenv(dotenv_path)
+    
+    port_str = os.environ.get("MOCK_SERVER_PORT", "5000")
+    try:
+        port = int(port_str)
+    except ValueError:
+        port = 5000
+        
     server_address = ('', port)
     httpd = http.server.HTTPServer(server_address, MockBhionexHandler)
     print(f"Mock Bhionex API Server is running on http://localhost:{port}/")
@@ -208,3 +238,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

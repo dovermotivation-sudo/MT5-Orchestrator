@@ -15,28 +15,40 @@ from urllib.error import URLError, HTTPError
 import MetaTrader5 as mt5
 
 
-def update_ini_template(template_content, login, password, server):
+def update_ini_template(template_content, login, password, server, expert=None, symbol=None, period=None):
     lines = template_content.splitlines()
     new_lines = []
     in_common = False
+    in_startup = False
     
-    updated_fields = {"login": False, "password": False, "server": False}
+    updated_common_fields = {"login": False, "password": False, "server": False}
+    updated_startup_fields = {"expert": False, "symbol": False, "period": False}
     
     for line in lines:
         stripped = line.strip()
         
         if stripped.startswith("[") and stripped.endswith("]"):
             section_name = stripped[1:-1].strip().lower()
+            
+            if in_common:
+                for key in ["login", "password", "server"]:
+                    if not updated_common_fields[key]:
+                        val = login if key == "login" else (password if key == "password" else server)
+                        new_lines.append(f"{key.capitalize()}={val}")
+                        updated_common_fields[key] = True
+                in_common = False
+                
+            if in_startup:
+                for key, val in [("expert", expert), ("symbol", symbol), ("period", period)]:
+                    if val is not None and not updated_startup_fields[key]:
+                        new_lines.append(f"{key.capitalize()}={val}")
+                        updated_startup_fields[key] = True
+                in_startup = False
+                
             if section_name == "common":
                 in_common = True
-            else:
-                if in_common:
-                    for key in ["login", "password", "server"]:
-                        if not updated_fields[key]:
-                            val = login if key == "login" else (password if key == "password" else server)
-                            new_lines.append(f"{key.capitalize()}={val}")
-                            updated_fields[key] = True
-                in_common = False
+            elif section_name == "startup":
+                in_startup = True
         
         if in_common and "=" in line and not stripped.startswith(";"):
             key, val = line.split("=", 1)
@@ -44,34 +56,60 @@ def update_ini_template(template_content, login, password, server):
             if key_stripped == "login":
                 left_side = key.split('=')[0]
                 new_lines.append(f"{left_side}={login}")
-                updated_fields["login"] = True
+                updated_common_fields["login"] = True
                 continue
             elif key_stripped == "password":
                 left_side = key.split('=')[0]
                 new_lines.append(f"{left_side}={password}")
-                updated_fields["password"] = True
+                updated_common_fields["password"] = True
                 continue
             elif key_stripped == "server":
                 left_side = key.split('=')[0]
                 new_lines.append(f"{left_side}={server}")
-                updated_fields["server"] = True
+                updated_common_fields["server"] = True
+                continue
+                
+        if in_startup and "=" in line and not stripped.startswith(";"):
+            key, val = line.split("=", 1)
+            key_stripped = key.strip().lower()
+            if key_stripped == "expert" and expert is not None:
+                left_side = key.split('=')[0]
+                new_lines.append(f"{left_side}={expert}")
+                updated_startup_fields["expert"] = True
+                continue
+            elif key_stripped == "symbol" and symbol is not None:
+                left_side = key.split('=')[0]
+                new_lines.append(f"{left_side}={symbol}")
+                updated_startup_fields["symbol"] = True
+                continue
+            elif key_stripped == "period" and period is not None:
+                left_side = key.split('=')[0]
+                new_lines.append(f"{left_side}={period}")
+                updated_startup_fields["period"] = True
                 continue
         
         new_lines.append(line)
         
     if in_common:
         for key in ["login", "password", "server"]:
-            if not updated_fields[key]:
+            if not updated_common_fields[key]:
                 val = login if key == "login" else (password if key == "password" else server)
                 new_lines.append(f"{key.capitalize()}={val}")
-                updated_fields[key] = True
+                updated_common_fields[key] = True
+                
+    if in_startup:
+        for key, val in [("expert", expert), ("symbol", symbol), ("period", period)]:
+            if val is not None and not updated_startup_fields[key]:
+                new_lines.append(f"{key.capitalize()}={val}")
+                updated_startup_fields[key] = True
                 
     return "\n".join(new_lines)
 
 
 class MT5Worker:
     def __init__(self, login_id, password, server, terminal_path, clone_dir, 
-                 api_base_url, api_key, user_id, script_code, config_template_path, sync_interval=30):
+                 api_base_url, api_key, user_id, script_code, config_template_path, sync_interval=30,
+                 expert=None, symbol=None, timeframe=None):
         self.login_id = int(login_id)
         self.password = password
         self.server = server
@@ -83,6 +121,11 @@ class MT5Worker:
         self.script_code = script_code
         self.config_template_path = os.path.normpath(config_template_path) if config_template_path else None
         self.sync_interval = sync_interval
+        
+        # Load expert, symbol, timeframe from parameters or fallback to env variables / defaults
+        self.expert = expert or os.environ.get("WORKER_EXPERT", "FCE")
+        self.symbol = symbol or os.environ.get("WORKER_SYMBOL", "XAUUSD")
+        self.timeframe = timeframe or os.environ.get("WORKER_TIMEFRAME", "M1")
         
         self.reported_tickets_file = os.path.join(self.clone_dir, "reported_tickets.json")
         self.reported_tickets = self._load_reported_tickets()
@@ -198,7 +241,10 @@ class MT5Worker:
                         template_content, 
                         str(self.login_id), 
                         self.password, 
-                        self.server
+                        self.server,
+                        expert=self.expert,
+                        symbol=self.symbol,
+                        period=self.timeframe
                     )
                     
                     dest_ini_path = os.path.join(self.clone_dir, "config.ini")
@@ -523,7 +569,30 @@ class MT5Worker:
         self.logger.info("Worker stop sequence complete.")
 
 
+def load_dotenv(dotenv_path=".env"):
+    if not os.path.exists(dotenv_path):
+        return False
+    with open(dotenv_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip()
+                if val.startswith('"') and val.endswith('"'):
+                    val = val[1:-1]
+                elif val.startswith("'") and val.endswith("'"):
+                    val = val[1:-1]
+                os.environ[key] = val
+    return True
+
 if __name__ == "__main__":
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dotenv_path = os.path.join(script_dir, ".env")
+    load_dotenv(dotenv_path)
+
     parser = argparse.ArgumentParser(description="Standalone MT5 Account Worker")
     parser.add_argument("--login", required=True, help="MT5 login ID")
     parser.add_argument("--password", required=True, help="MT5 login password")
@@ -536,11 +605,12 @@ if __name__ == "__main__":
     parser.add_argument("--script-code", required=True, help="Active script code (e.g. SCRIPT_1)")
     parser.add_argument("--config-template", required=True, help="Path to config.ini template")
     parser.add_argument("--interval", type=int, default=30, help="Sync interval in seconds")
+    parser.add_argument("--expert", help="MT5 Expert Advisor name")
+    parser.add_argument("--symbol", help="MT5 Symbol")
+    parser.add_argument("--timeframe", help="MT5 Timeframe / Period (e.g. M1, H1)")
     
     args = parser.parse_args()
     
-
-        
     worker = MT5Worker(
         login_id=args.login,
         password=args.password,
@@ -552,7 +622,10 @@ if __name__ == "__main__":
         user_id=args.user_id,
         script_code=args.script_code,
         config_template_path=args.config_template,
-        sync_interval=args.interval
+        sync_interval=args.interval,
+        expert=args.expert,
+        symbol=args.symbol,
+        timeframe=args.timeframe
     )
     
     worker.start()

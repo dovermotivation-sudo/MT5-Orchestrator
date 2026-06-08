@@ -302,6 +302,13 @@ def main():
                     "--interval", "30"
                 ]
                 
+                if os.environ.get("WORKER_EXPERT"):
+                    worker_cmd.extend(["--expert", os.environ.get("WORKER_EXPERT")])
+                if os.environ.get("WORKER_SYMBOL"):
+                    worker_cmd.extend(["--symbol", os.environ.get("WORKER_SYMBOL")])
+                if os.environ.get("WORKER_TIMEFRAME"):
+                    worker_cmd.extend(["--timeframe", os.environ.get("WORKER_TIMEFRAME")])
+                
                 child_env = os.environ.copy()
                     
                 print(f"  [+] Spawning worker for {creds['email']} (Login: {login})...")
