@@ -29,6 +29,6 @@ worker_*.log
 *.sln
 *.swp
 
-Master MT5
+# Master MT5 - tracked via Git LFS for large binaries
 docs/bhionex-doc-for-bot.html
 docs/bhionex-doc-for-bot.txt
