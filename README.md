@@ -22,6 +22,20 @@ The MT5 Account Orchestrator is a continuous background daemon that manages Meta
    pip install -r requirements.txt
    ```
 
+### Linux Setup (via Wine)
+Because MetaTrader 5 and its Python package are Windows-only, you must run the entire orchestrator inside Wine on Linux:
+1. Install Wine on your Linux server.
+2. Install the MT5 terminal inside your Wine prefix.
+3. Install **Windows Python** (e.g., Python 3.9+) inside Wine.
+4. Open a Wine CMD or terminal and install dependencies using the Wine Python:
+   ```bash
+   wine python.exe -m pip install -r requirements.txt
+   ```
+5. Run the orchestrator and all scripts using the Wine Python:
+   ```bash
+   wine python.exe orchestrator.py
+   ```
+
 ---
 
 ## How to Run

@@ -2,6 +2,7 @@
 import os
 import sys
 import subprocess
+import psutil
 
 def load_dotenv(dotenv_path=".env"):
     if not os.path.exists(dotenv_path):
@@ -22,60 +23,38 @@ def load_dotenv(dotenv_path=".env"):
                 os.environ[key] = val
     return True
 
-def kill_windows_processes(clients_dir_name):
-    terminated_count = 0
-    
-    py_cmd = 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "python" -and $_.CommandLine -like "*worker.py*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; $_.ProcessId }'
-    try:
-        res = subprocess.run(["powershell", "-Command", py_cmd], capture_output=True, text=True, check=True)
-        pids = [line.strip() for line in res.stdout.splitlines() if line.strip()]
-        for pid in pids:
-            print(f"  [x] Terminated Python Worker Process (PID: {pid})")
-            terminated_count += 1
-    except Exception as e:
-        print(f"Error querying/terminating Windows python workers: {e}")
-        
-    term_cmd = f'Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -like "terminal64.exe" -or $_.Name -like "terminal.exe") -and ($_.CommandLine -like "*{clients_dir_name}*" -or $_.CommandLine -like "*clone_*") }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force; $_.ProcessId }}'
-    try:
-        res = subprocess.run(["powershell", "-Command", term_cmd], capture_output=True, text=True, check=True)
-        pids = [line.strip() for line in res.stdout.splitlines() if line.strip()]
-        for pid in pids:
-            print(f"  [x] Terminated Cloned MT5 Terminal Process (PID: {pid})")
-            terminated_count += 1
-    except Exception as e:
-        print(f"Error querying/terminating Windows MT5 terminal processes: {e}")
-        
-    return terminated_count
-
-def kill_unix_processes(clients_dir_name):
+def kill_all_processes(clients_dir_name):
     terminated_count = 0
     my_pid = os.getpid()
-    
-    try:
-        res = subprocess.run(["pgrep", "-f", "worker.py"], capture_output=True, text=True)
-        pids = [line.strip() for line in res.stdout.splitlines() if line.strip()]
-        for pid in pids:
-            if int(pid) != my_pid:
-                subprocess.run(["kill", "-9", pid])
-                print(f"  [x] Terminated Python Worker Process (PID: {pid})")
+
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if proc.info['pid'] == my_pid:
+                continue
+
+            name = proc.info['name']
+            cmdline = proc.info['cmdline']
+
+            if not name or not cmdline:
+                continue
+
+            cmdline_str = " ".join(cmdline).lower()
+            name_lower = name.lower()
+
+            is_worker = ("python" in name_lower or "wine" in name_lower) and "worker.py" in cmdline_str
+            is_terminal = ("terminal64.exe" in name_lower or "terminal.exe" in name_lower or "wine" in name_lower) and (clients_dir_name.lower() in cmdline_str or "clone_" in cmdline_str)
+
+            if is_worker or is_terminal:
+                proc.kill()
+                if is_worker:
+                    print(f"  [x] Terminated Python Worker Process (PID: {proc.info['pid']})")
+                else:
+                    print(f"  [x] Terminated Cloned MT5 Terminal Process (PID: {proc.info['pid']})")
                 terminated_count += 1
-    except Exception as e:
-        print(f"Error querying/terminating Unix python workers: {e}")
-        
-    try:
-        res = subprocess.run(["pgrep", "-f", "terminal"], capture_output=True, text=True)
-        pids = [line.strip() for line in res.stdout.splitlines() if line.strip()]
-        for pid in pids:
-            if int(pid) != my_pid:
-                cmd_res = subprocess.run(["ps", "-p", pid, "-o", "args="], capture_output=True, text=True)
-                cmdline = cmd_res.stdout.strip()
-                if clients_dir_name in cmdline or "clone_" in cmdline:
-                    subprocess.run(["kill", "-9", pid])
-                    print(f"  [x] Terminated Cloned MT5 Process (Wine/Terminal PID: {pid})")
-                    terminated_count += 1
-    except Exception as e:
-        print(f"Error querying/terminating Unix terminal processes: {e}")
-        
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
     return terminated_count
 
 def main():
@@ -92,10 +71,7 @@ def main():
     
     print(f"\nScanning and stopping all processes matching workers or clients in '{clients_dir_name}'...")
     
-    if os.name == "nt":
-        count = kill_windows_processes(clients_dir_name)
-    else:
-        count = kill_unix_processes(clients_dir_name)
+    count = kill_all_processes(clients_dir_name)
         
     if count > 0:
         print(f"\nSuccessfully terminated {count} process(es).")
