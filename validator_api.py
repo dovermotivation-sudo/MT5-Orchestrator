@@ -137,7 +137,7 @@ def validate():
         cleanup_temp_dir(temp_dir_path)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("VALIDATOR_PORT", 5000))
+    port = int(os.environ.get("VALIDATOR_PORT", 5001))
     threads = int(os.environ.get("VALIDATOR_THREADS", 4))
     
     try:
