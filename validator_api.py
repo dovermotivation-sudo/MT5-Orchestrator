@@ -9,7 +9,7 @@ import time
 import psutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
+#cors added
 def load_dotenv(dotenv_path=".env"):
     if not os.path.exists(dotenv_path):
         return False
