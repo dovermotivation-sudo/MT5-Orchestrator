@@ -8,6 +8,7 @@ import shutil
 import time
 import psutil
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 def load_dotenv(dotenv_path=".env"):
     if not os.path.exists(dotenv_path):
@@ -33,6 +34,7 @@ dotenv_path = os.path.join(script_dir, ".env")
 load_dotenv(dotenv_path)
 
 app = Flask(__name__)
+CORS(app)
 
 MASTER_MT5_DIR = os.environ.get("MASTER_MT5_DIR")
 CLIENTS_DIR = os.environ.get("CLIENTS_DIR")
