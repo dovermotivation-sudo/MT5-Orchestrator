@@ -70,7 +70,7 @@ def validate():
     if not data:
         return jsonify({"valid": False, "error": "Invalid or missing JSON payload"}), 400
         
-    login = data.get("login")
+    login = data.get("loginId")
     password = data.get("password")
     server = data.get("server")
     
