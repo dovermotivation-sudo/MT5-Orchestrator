@@ -266,7 +266,7 @@ class MT5Worker:
                     )
                     
                     dest_ini_path = os.path.join(self.clone_dir, "config.ini")
-                    with open(dest_ini_path, "w", encoding="utf-16") as f:
+                    with open(dest_ini_path, "w", encoding="utf-8") as f:
                         f.write(updated_content)
                     self.logger.info(f"Successfully wrote config.ini to {dest_ini_path}")
                 except Exception as e:
