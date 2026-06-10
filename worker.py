@@ -266,7 +266,7 @@ class MT5Worker:
                     )
                     
                     dest_ini_path = os.path.join(self.clone_dir, "config.ini")
-                    with open(dest_ini_path, "w", encoding="utf-8") as f:
+                    with open(dest_ini_path, "w", encoding="utf-16") as f:
                         f.write(updated_content)
                     self.logger.info(f"Successfully wrote config.ini to {dest_ini_path}")
                 except Exception as e:
@@ -326,8 +326,9 @@ class MT5Worker:
             creation_flags = subprocess.CREATE_NEW_CONSOLE
 
         try:
+            config_file_path = os.path.join(self.clone_dir, "config.ini")
             self.mt5_process = subprocess.Popen(
-                [executable, "/portable", "/config:config.ini"],
+                [executable, "/portable", f"/config:{config_file_path}"],
                 cwd=self.clone_dir,
                 creationflags=creation_flags
             )
