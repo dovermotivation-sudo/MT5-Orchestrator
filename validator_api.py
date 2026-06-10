@@ -64,7 +64,7 @@ def cleanup_temp_dir(temp_dir_path):
             time.sleep(1)
             kill_processes_in_dir(temp_dir_path)
 
-@app.route('/validate', methods=['POST'])
+@app.route('/', methods=['POST'])
 def validate():
     data = request.get_json(force=True, silent=True)
     if not data:
