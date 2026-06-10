@@ -326,12 +326,22 @@ class MT5Worker:
             creation_flags = subprocess.CREATE_NEW_CONSOLE
 
         try:
-            config_file_path = os.path.join(self.clone_dir, "config.ini")
-            self.mt5_process = subprocess.Popen(
-                [executable, "/portable", f"/config:{config_file_path}"],
-                cwd=self.clone_dir,
-                creationflags=creation_flags
-            )
+            config_file_path = os.path.normpath(os.path.join(self.clone_dir, "config.ini"))
+            if os.name == "nt":
+                # Use a raw string on Windows/Wine to prevent subprocess from quoting the '/config:' prefix when the path contains spaces
+                cmd_str = f'"{executable}" /portable /config:"{config_file_path}"'
+                self.logger.info(f"Spawning MT5 with command line: {cmd_str}")
+                self.mt5_process = subprocess.Popen(
+                    cmd_str,
+                    cwd=self.clone_dir,
+                    creationflags=creation_flags
+                )
+            else:
+                self.mt5_process = subprocess.Popen(
+                    [executable, "/portable", f"/config:{config_file_path}"],
+                    cwd=self.clone_dir,
+                    creationflags=creation_flags
+                )
             self.logger.info(f"MT5 terminal process spawned (PID: {self.mt5_process.pid})")
             
             time.sleep(5)
