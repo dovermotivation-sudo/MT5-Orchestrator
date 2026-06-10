@@ -78,6 +78,7 @@ def main():
             login=login,
             password=password,
             server=server,
+            timeout=20000,
             portable=True
         )
         
