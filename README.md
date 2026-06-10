@@ -31,10 +31,25 @@ Because MetaTrader 5 and its Python package are Windows-only, you must run the e
    ```bash
    wine python.exe -m pip install -r requirements.txt
    ```
-5. Run the orchestrator and all scripts using the Wine Python:
-   ```bash
-   wine python.exe orchestrator.py
-   ```
+5. Run the orchestrator using the Wine Python.
+
+#### Headless Servers (VPS without Desktop Environment)
+Since MetaTrader 5 is a graphical application, running it under Wine in a headless environment requires a virtual framebuffer (like `Xvfb`) to emulate a display.
+
+Install `xvfb` using your package manager (e.g., `sudo apt-get install xvfb`), and run the orchestrator prefixed with `xvfb-run`:
+```bash
+xvfb-run wine python.exe orchestrator.py
+```
+
+Similarly, if you are running the Validator API on a headless server, start it using `xvfb-run`:
+```bash
+xvfb-run wine python.exe validator_api.py
+```
+
+If you have a GUI desktop environment and an active display session, you can run normally:
+```bash
+wine python.exe orchestrator.py
+```
 
 ---
 

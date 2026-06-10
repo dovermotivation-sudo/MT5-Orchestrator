@@ -20,7 +20,25 @@ def kill_processes_in_dir(target_dir):
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
             pass
 
+
+def is_wine():
+    """Detect if we are running under Wine compatibility layer."""
+    import ctypes
+    try:
+        return hasattr(ctypes.windll.ntdll, 'wine_get_version')
+    except Exception:
+        pass
+    for env_var in ["WINEPREFIX", "WINELOADERNOEXEC", "WINEARCH"]:
+        if env_var in os.environ:
+            return True
+    return False
+
+
 def main():
+    if is_wine() and "DISPLAY" not in os.environ:
+        sys.stderr.write("Running in headless Wine environment (DISPLAY not set). MetaTrader 5 requires an active X11 display or virtual framebuffer (Xvfb) to run.\n")
+        sys.exit(1)
+        
     try:
         input_data = sys.stdin.read()
         if not input_data:

@@ -30,6 +30,19 @@ def load_dotenv(dotenv_path=".env"):
     return True
 
 
+def is_wine():
+    """Detect if we are running under Wine compatibility layer."""
+    import ctypes
+    try:
+        return hasattr(ctypes.windll.ntdll, 'wine_get_version')
+    except Exception:
+        pass
+    for env_var in ["WINEPREFIX", "WINELOADERNOEXEC", "WINEARCH"]:
+        if env_var in os.environ:
+            return True
+    return False
+
+
 def fetch_active_subscriptions(base_url, api_key, page=1, limit=100):
     url = f"{base_url.rstrip('/')}/api/bot/active-subscriptions?includeCredentials=true&page={page}&limit={limit}"
     req = Request(url)
@@ -135,6 +148,18 @@ def handle_shutdown(signum, frame):
 def main():
     global is_running
     
+    if sys.platform != "win32" and not is_wine():
+        print("Error: The orchestrator must be run under Windows Python inside Wine on Linux.")
+        print("Please run: wine python orchestrator.py")
+        sys.exit(1)
+        
+    if is_wine():
+        print("[Wine Detected]")
+        if "DISPLAY" not in os.environ:
+            print("  [WARNING] Running in headless Wine environment (DISPLAY is not set).")
+            print("            MetaTrader 5 requires an active X11 display/virtual framebuffer to run.")
+            print("            Please run with 'xvfb-run' (e.g. 'xvfb-run wine python orchestrator.py') or ensure DISPLAY is set.\n")
+            
     parser = argparse.ArgumentParser(description="Bhionex MT5 Worker Orchestrator Daemon")
     parser.add_argument("--interval", type=int, help="Override polling interval in seconds")
     args = parser.parse_args()
@@ -267,18 +292,36 @@ def main():
                     worker_cmd.extend(["--timeframe", os.environ.get("WORKER_TIMEFRAME")])
                 
                 child_env = os.environ.copy()
+                
+                # Determine creation flags
+                creation_flags = 0
+                if os.name == "nt" and not is_wine():
+                    creation_flags = subprocess.DETACHED_PROCESS
                     
+                # Redirect worker output to a log file instead of DEVNULL to aid debugging under Wine
+                os.makedirs(abs_client_dir, exist_ok=True)
+                spawn_log_path = os.path.join(abs_client_dir, f"worker_{login}_spawn.log")
+                
                 print(f"  [+] Spawning worker for {creds['email']} (Login: {login})...")
-                p = subprocess.Popen(
-                    worker_cmd,
-                    env=child_env,
-                    cwd=script_dir,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.DETACHED_PROCESS if os.name == "nt" else 0
-                )
-                return p
+                try:
+                    log_file = open(spawn_log_path, "a", encoding="utf-8")
+                    log_file.write(f"\n--- Worker Spawning at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+                    log_file.write(f"Command: {' '.join(worker_cmd)}\n\n")
+                    log_file.flush()
+                    
+                    p = subprocess.Popen(
+                        worker_cmd,
+                        env=child_env,
+                        cwd=script_dir,
+                        stdin=subprocess.DEVNULL,
+                        stdout=log_file,
+                        stderr=log_file,
+                        creationflags=creation_flags
+                    )
+                    return p
+                except Exception as e:
+                    print(f"  [!] Failed to spawn worker subprocess: {e}")
+                    return None
                 
             if login_id not in running_workers:
                 proc = spawn_worker(login_id, config)
@@ -309,6 +352,7 @@ def main():
                 else:
                     if proc.poll() is not None:
                         print(f"  [!] Worker for {config['email']} (Login: {login_id}) died unexpectedly (Exit Code: {proc.returncode}). Restarting...")
+                        print(f"      Check spawn log for details: {os.path.normpath(os.path.join(user_client_dir, f'worker_{login_id}_spawn.log'))}")
                         kill_processes_for_login(login_id, clients_dir_name)
                         new_proc = spawn_worker(login_id, config)
                         running_workers[login_id]["process"] = new_proc

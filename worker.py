@@ -15,6 +15,19 @@ from urllib.error import URLError, HTTPError
 import MetaTrader5 as mt5
 
 
+def is_wine():
+    """Detect if we are running under Wine compatibility layer."""
+    import ctypes
+    try:
+        return hasattr(ctypes.windll.ntdll, 'wine_get_version')
+    except Exception:
+        pass
+    for env_var in ["WINEPREFIX", "WINELOADERNOEXEC", "WINEARCH"]:
+        if env_var in os.environ:
+            return True
+    return False
+
+
 def update_ini_template(template_content, login, password, server, expert=None, symbol=None, period=None):
     lines = template_content.splitlines()
     new_lines = []
@@ -150,6 +163,11 @@ class MT5Worker:
             self.logger.addHandler(sh)
         
         self.logger.info("Worker initialized.")
+        if is_wine():
+            self.logger.info("Wine environment detected.")
+            if "DISPLAY" not in os.environ:
+                self.logger.warning("Running in headless Wine environment (DISPLAY not set). "
+                                    "MetaTrader 5 requires an active X11 display or virtual framebuffer (Xvfb) to launch successfully.")
 
     def _load_reported_tickets(self):
         """Load already synced trade ticket IDs from local JSON storage."""
@@ -303,11 +321,15 @@ class MT5Worker:
                 return False
 
 
+        creation_flags = 0
+        if os.name == "nt" and not is_wine():
+            creation_flags = subprocess.CREATE_NEW_CONSOLE
+
         try:
             self.mt5_process = subprocess.Popen(
                 [executable, "/portable", "/config:config.ini"],
                 cwd=self.clone_dir,
-                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
+                creationflags=creation_flags
             )
             self.logger.info(f"MT5 terminal process spawned (PID: {self.mt5_process.pid})")
             
