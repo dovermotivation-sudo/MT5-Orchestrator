@@ -108,7 +108,9 @@ def main():
             time.sleep(1)
             t_info = mt5.terminal_info()
             if t_info and t_info.connected:
-                result = {"valid": True}
+                a_info = mt5.account_info()
+                equity = a_info.equity if a_info is not None else None
+                result = {"valid": True, "equity": equity}
             else:
                 result = {"valid": False, "error": "Invalid credentials or broker unreachable"}
         else:
