@@ -143,6 +143,10 @@ class MT5Worker:
         self.reported_tickets_file = os.path.join(self.clone_dir, "reported_tickets.json")
         self.reported_tickets = self._load_reported_tickets()
         
+        self.last_connected_status = None
+        self.reported_balance_tickets_file = os.path.join(self.clone_dir, "reported_balance_tickets.json")
+        self.reported_balance_tickets = self._load_reported_balance_tickets()
+        
         self.mt5_process = None
         self.stop_event = threading.Event()
         self.monitor_thread = None
@@ -187,6 +191,25 @@ class MT5Worker:
                 json.dump(list(self.reported_tickets), f)
         except Exception as e:
             self.logger.error(f"Failed to save reported tickets list: {e}")
+
+    def _load_reported_balance_tickets(self):
+        """Load already processed balance operation ticket IDs from local JSON storage."""
+        if os.path.exists(self.reported_balance_tickets_file):
+            try:
+                with open(self.reported_balance_tickets_file, "r") as f:
+                    data = json.load(f)
+                    return set(str(t) for t in data)
+            except Exception:
+                pass
+        return set()
+
+    def _save_reported_balance_tickets(self):
+        """Persist processed balance operation ticket IDs to local storage."""
+        try:
+            with open(self.reported_balance_tickets_file, "w") as f:
+                json.dump(list(self.reported_balance_tickets), f)
+        except Exception as e:
+            self.logger.error(f"Failed to save reported balance tickets list: {e}")
 
     def _send_api_post(self, endpoint, data):
         """Helper to send authenticated POST request to Bhionex API."""
@@ -454,6 +477,36 @@ class MT5Worker:
         if new_trades_reported > 0:
             self._save_reported_tickets()
 
+    def sync_balance_operations(self):
+        """Check for new balance operations (deposits/withdrawals) in history.
+        If any new ones are detected, trigger sync_account_status.
+        """
+        self.logger.info("Checking MT5 deal history for balance operations (deposits/withdrawals)...")
+        
+        now = datetime.datetime.now()
+        date_from = now - datetime.timedelta(days=7)
+        date_to = now + datetime.timedelta(days=1)
+        
+        deals = mt5.history_deals_get(date_from, date_to)
+        if deals is None:
+            err = mt5.last_error()
+            self.logger.error(f"Failed to retrieve deal history for balance check: {err}")
+            return
+            
+        new_balance_ops = 0
+        for deal in deals:
+            # Check if this is a balance operation (deposit/withdrawal) and not yet reported
+            deal_type_balance = getattr(mt5, "DEAL_TYPE_BALANCE", 2)
+            if deal.type == deal_type_balance and str(deal.ticket) not in self.reported_balance_tickets:
+                self.logger.info(f"Found new balance operation: Ticket={deal.ticket}, Profit/Amount={deal.profit}, Comment={deal.comment}")
+                self.reported_balance_tickets.add(str(deal.ticket))
+                new_balance_ops += 1
+                
+        if new_balance_ops > 0:
+            self._save_reported_balance_tickets()
+            self.logger.info(f"Detected {new_balance_ops} new balance operation(s). Triggering account summary sync.")
+            self.sync_account_status(is_connected=True)
+
     def sync_account_status(self, is_connected):
         """Sends account metrics summary to the Bhionex API."""
         self.logger.info("Reporting account summary...")
@@ -526,9 +579,13 @@ class MT5Worker:
                     time.sleep(10)
                     continue
                     
-                self.sync_account_status(is_connected=connected)
+                if connected != self.last_connected_status:
+                    self.sync_account_status(is_connected=connected)
+                    self.last_connected_status = connected
+                    
                 if connected:
                     self.sync_closed_trades()
+                    self.sync_balance_operations()
                     
             except Exception as e:
                 self.logger.error(f"Error in monitor loop iteration: {e}")
