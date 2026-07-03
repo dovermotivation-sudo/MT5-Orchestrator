@@ -414,9 +414,9 @@ class MT5Worker:
         """Fetch closed trades from history and report them to the Bhionex API."""
         self.logger.info("Checking MT5 deal history for closed trades...")
         
-        now = datetime.datetime.now()
-        date_from = now - datetime.timedelta(days=7)
-        date_to = now + datetime.timedelta(days=1)
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        date_from = now - datetime.timedelta(days=30)
+        date_to = now + datetime.timedelta(days=5)
         
         deals = mt5.history_deals_get(date_from, date_to)
         if deals is None:
@@ -428,7 +428,7 @@ class MT5Worker:
         new_trades_reported = 0
         
         for deal in deals:
-            if deal.entry == 1 and str(deal.ticket) not in self.reported_tickets:
+            if deal.entry in (1, 2, 3) and str(deal.ticket) not in self.reported_tickets:
                 self.logger.info(f"Found new closed deal: Ticket={deal.ticket}, Symbol={deal.symbol}, Profit={deal.profit}")
                 
                 entry_price = 0.0
@@ -483,9 +483,9 @@ class MT5Worker:
         """
         self.logger.info("Checking MT5 deal history for balance operations (deposits/withdrawals)...")
         
-        now = datetime.datetime.now()
-        date_from = now - datetime.timedelta(days=7)
-        date_to = now + datetime.timedelta(days=1)
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        date_from = now - datetime.timedelta(days=30)
+        date_to = now + datetime.timedelta(days=5)
         
         deals = mt5.history_deals_get(date_from, date_to)
         if deals is None:
@@ -522,20 +522,12 @@ class MT5Worker:
             status_payload.update({
                 "currentBalance": acc_info.balance,
                 "investedAmount": max(0.0, acc_info.equity - acc_info.balance) if acc_info.equity > acc_info.balance else 0.0,
-                "profit": max(0.0, acc_info.profit),
-                "loss": abs(min(0.0, acc_info.profit)),
-                "netProfitLoss": acc_info.profit,
-                "profitPercentage": (acc_info.profit / acc_info.balance * 100) if acc_info.balance > 0 else 0.0,
                 "lastSyncAt": datetime.datetime.now(datetime.timezone.utc).isoformat()
             })
         else:
             status_payload.update({
                 "currentBalance": 0.0,
                 "investedAmount": 0.0,
-                "profit": 0.0,
-                "loss": 0.0,
-                "netProfitLoss": 0.0,
-                "profitPercentage": 0.0,
                 "lastSyncAt": datetime.datetime.now(datetime.timezone.utc).isoformat()
             })
             
