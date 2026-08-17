@@ -505,7 +505,7 @@ class MT5Worker:
         if new_balance_ops > 0:
             self._save_reported_balance_tickets()
             self.logger.info(f"Detected {new_balance_ops} new balance operation(s). Triggering account summary sync.")
-            self.sync_account_status(is_connected=True)
+            # self.sync_account_status(is_connected=True)
 
     def sync_account_status(self, is_connected):
         """Sends account metrics summary to the Bhionex API."""
@@ -572,7 +572,7 @@ class MT5Worker:
                     continue
                     
                 if connected != self.last_connected_status:
-                    self.sync_account_status(is_connected=connected)
+                    # self.sync_account_status(is_connected=connected)
                     self.last_connected_status = connected
                     
                 if connected:
