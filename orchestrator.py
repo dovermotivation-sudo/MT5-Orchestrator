@@ -71,13 +71,14 @@ def kill_processes_for_login(login_id, clients_dir_name):
     login_id = str(login_id)
     my_pid = os.getpid()
 
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    for proc in psutil.process_iter():
         try:
-            if proc.info['pid'] == my_pid:
+            pid = proc.pid
+            if pid == my_pid:
                 continue
 
-            name = proc.info['name']
-            cmdline = proc.info['cmdline']
+            name = proc.name()
+            cmdline = proc.cmdline()
 
             if not name or not cmdline:
                 continue
@@ -88,17 +89,17 @@ def kill_processes_for_login(login_id, clients_dir_name):
             # Check for python worker
             if ("python" in name_lower or "wine" in name_lower) and "worker.py" in cmdline_str and f"--login {login_id}" in cmdline_str:
                 proc.kill()
-                print(f"  [x] Terminated Python Worker Process (PID: {proc.info['pid']}) for Login: {login_id}")
+                print(f"  [x] Terminated Python Worker Process (PID: {pid}) for Login: {login_id}")
                 terminated_count += 1
                 continue
 
             # Check for terminal
             if ("terminal64.exe" in name_lower or "terminal.exe" in name_lower or "wine" in name_lower) and clients_dir_name.lower() in cmdline_str and f"clone_{login_id}" in cmdline_str:
                 proc.kill()
-                print(f"  [x] Terminated Cloned MT5 Process (PID: {proc.info['pid']}) for Login: {login_id}")
+                print(f"  [x] Terminated Cloned MT5 Process (PID: {pid}) for Login: {login_id}")
                 terminated_count += 1
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
             pass
 
     return terminated_count
@@ -108,13 +109,14 @@ def global_cleanup(clients_dir_name):
     terminated_count = 0
     my_pid = os.getpid()
 
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    for proc in psutil.process_iter():
         try:
-            if proc.info['pid'] == my_pid:
+            pid = proc.pid
+            if pid == my_pid:
                 continue
 
-            name = proc.info['name']
-            cmdline = proc.info['cmdline']
+            name = proc.name()
+            cmdline = proc.cmdline()
 
             if not name or not cmdline:
                 continue
@@ -129,7 +131,7 @@ def global_cleanup(clients_dir_name):
                 proc.kill()
                 terminated_count += 1
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
             pass
 
     if terminated_count > 0:
