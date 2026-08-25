@@ -43,13 +43,13 @@ VALIDATION_TIMEOUT = int(os.environ.get("VALIDATION_TIMEOUT", 30))
 def kill_processes_in_dir(target_dir):
     """Force kill any processes running from the target directory to allow clean deletion."""
     target_dir_abs = os.path.abspath(target_dir).lower()
-    for proc in psutil.process_iter(['pid', 'exe']):
+    for proc in psutil.process_iter():
         try:
-            exe = proc.info.get('exe')
+            exe = proc.exe()
             if exe and os.path.abspath(exe).lower().startswith(target_dir_abs):
                 proc.kill()
                 proc.wait(timeout=2)
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired, OSError, Exception):
             pass
 
 def cleanup_temp_dir(temp_dir_path):

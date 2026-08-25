@@ -35,12 +35,12 @@ def main():
     
     print("Scanning for validation-related processes...")
     killed_count = 0
-    for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+    for proc in psutil.process_iter():
         try:
-            pid = proc.info.get('pid')
-            name = proc.info.get('name')
-            exe = proc.info.get('exe')
-            cmdline = proc.info.get('cmdline') or []
+            pid = proc.pid
+            name = proc.name()
+            exe = proc.exe()
+            cmdline = proc.cmdline() or []
             
             is_validation_script = False
             for arg in cmdline:
@@ -65,7 +65,7 @@ def main():
                 proc.wait(timeout=3)
                 killed_count += 1
                 
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired, OSError, Exception):
             pass
             
     print(f"Process cleanup complete. Killed {killed_count} process(es).")

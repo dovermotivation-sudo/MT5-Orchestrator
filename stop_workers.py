@@ -27,13 +27,14 @@ def kill_all_processes(clients_dir_name):
     terminated_count = 0
     my_pid = os.getpid()
 
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    for proc in psutil.process_iter():
         try:
-            if proc.info['pid'] == my_pid:
+            pid = proc.pid
+            if pid == my_pid:
                 continue
 
-            name = proc.info['name']
-            cmdline = proc.info['cmdline']
+            name = proc.name()
+            cmdline = proc.cmdline()
 
             if not name or not cmdline:
                 continue
@@ -47,12 +48,12 @@ def kill_all_processes(clients_dir_name):
             if is_worker or is_terminal:
                 proc.kill()
                 if is_worker:
-                    print(f"  [x] Terminated Python Worker Process (PID: {proc.info['pid']})")
+                    print(f"  [x] Terminated Python Worker Process (PID: {pid})")
                 else:
-                    print(f"  [x] Terminated Cloned MT5 Terminal Process (PID: {proc.info['pid']})")
+                    print(f"  [x] Terminated Cloned MT5 Terminal Process (PID: {pid})")
                 terminated_count += 1
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError, Exception):
             pass
 
     return terminated_count
